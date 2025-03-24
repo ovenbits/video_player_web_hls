@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:js_interop';
 import 'dart:math';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
@@ -38,8 +39,7 @@ const Map<int, String> _kErrorValueToErrorDescription = <int, String>{
 
 // The default error message, when the error is an empty string
 // See: https://developer.mozilla.org/en-US/docs/Web/API/MediaError/message
-const String _kDefaultErrorMessage =
-    'No further diagnostic information can be determined or provided.';
+const String _kDefaultErrorMessage = 'No further diagnostic information can be determined or provided.';
 
 /// Wraps a [html.VideoElement] so its API complies with what is expected by the plugin.
 class VideoPlayer {
@@ -81,7 +81,6 @@ class VideoPlayer {
       ..autoplay = false
       ..controls = false
       ..playsInline = true;
-
     if (_hlsFallback == true || await shouldUseHlsLibrary()) {
       _hlsFallback = false;
       try {
@@ -103,22 +102,24 @@ class VideoPlayer {
             }.toJS,
           ),
         );
+        _hls!.subtitleDisplay = false.toJS;
+        _hls!.subtitleTrack = (-1).toJS;
         _hls!.attachMedia(_videoElement);
         _hls!.on(
             'hlsMediaAttached',
-            ((String _, JSObject __) {
+            ((String event, JSObject __) {
               _hls!.loadSource(uri.toString());
             }.toJS));
         _hls!.on(
             'hlsError',
             (String _, JSObject data) {
               try {
-                final ErrorData _data = ErrorData(data);
-                if (_data.fatal) {
+                final ErrorData errorData = ErrorData(data);
+                if (errorData.fatal) {
                   _eventController.addError(PlatformException(
                     code: _kErrorValueToErrorName[2]!,
-                    message: _data.type,
-                    details: _data.details,
+                    message: errorData.type,
+                    details: errorData.details,
                   ));
                 }
               } catch (e) {
@@ -126,7 +127,7 @@ class VideoPlayer {
               }
             }.toJS);
         _eventsSubscriptions.add(_videoElement.onCanPlay.listen((dynamic _) {
-          _onVideoElementInitialization(_) ;
+          _onVideoElementInitialization(_);
           setBuffering(false);
         }));
       } catch (e) {
@@ -134,14 +135,13 @@ class VideoPlayer {
       }
     } else {
       _videoElement.src = uri.toString();
-      final onDurationChange = (web.Event event) {
+      onDurationChange(web.Event event) {
         if (_videoElement.duration == 0) {
           return;
         }
         _onVideoElementInitialization(event);
-      };
-      _eventsSubscriptions
-          .add(_videoElement.onDurationChange.listen(onDurationChange));
+      }
+      _eventsSubscriptions.add(_videoElement.onDurationChange.listen(onDurationChange));
     }
 
     // Needed for Safari iOS 17, which may not send `canplay`.
@@ -305,23 +305,24 @@ class VideoPlayer {
 
   // Sends an [VideoEventType.initialized] [VideoEvent] with info about the wrapped video.
   void _sendInitialized() {
-    final Duration? duration =
-        convertNumVideoDurationToPluginDuration(_videoElement.duration);
-
-    final Size? size = _videoElement.videoHeight.isFinite
-        ? Size(
-            _videoElement.videoWidth.toDouble(),
-            _videoElement.videoHeight.toDouble(),
-          )
-        : null;
-
-    _eventController.add(
-      VideoEvent(
-        eventType: VideoEventType.initialized,
-        duration: duration,
-        size: size,
-      ),
-    );
+    final Duration? duration = convertNumVideoDurationToPluginDuration(_videoElement.duration);
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    deviceInfo.webBrowserInfo.then((info) {
+      var isSafari = info.browserName == BrowserName.safari;
+      final Size? size = _videoElement.videoHeight.isFinite
+          ? Size(
+              isSafari ? 640 : _videoElement.videoWidth.toDouble(),
+              isSafari ? 360 : _videoElement.videoHeight.toDouble(),
+            )
+          : null;
+      _eventController.add(
+        VideoEvent(
+          eventType: VideoEventType.initialized,
+          duration: duration,
+          size: size,
+        ),
+      );
+    });
   }
 
   /// Caches the current "buffering" state of the video.
@@ -333,9 +334,7 @@ class VideoPlayer {
     if (_isBuffering != buffering) {
       _isBuffering = buffering;
       _eventController.add(VideoEvent(
-        eventType: _isBuffering
-            ? VideoEventType.bufferingStart
-            : VideoEventType.bufferingEnd,
+        eventType: _isBuffering ? VideoEventType.bufferingStart : VideoEventType.bufferingEnd,
       ));
     }
   }
@@ -363,17 +362,16 @@ class VideoPlayer {
   bool canPlayHlsNatively() {
     bool canPlayHls = false;
     try {
-      final String canPlayType =
-          _videoElement.canPlayType('application/vnd.apple.mpegurl');
+      final String canPlayType = _videoElement.canPlayType('application/vnd.apple.mpegurl');
       canPlayHls = canPlayType != '';
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Error checking if video element can play HLS natively: $e');
+    }
     return canPlayHls;
   }
 
   Future<bool> shouldUseHlsLibrary() async {
-    return isSupported() &&
-        (uri.toString().contains('m3u8') || await _testIfM3u8()) &&
-        !canPlayHlsNatively();
+    return isSupported() && (uri.toString().contains('m3u8') || await _testIfM3u8()) && !canPlayHlsNatively();
   }
 
   Future<bool> _testIfM3u8() async {
@@ -390,8 +388,7 @@ class VideoPlayer {
       } else {
         headers['Range'] = 'bytes=0-1023';
       }
-      final http.Response response =
-          await http.get(Uri.parse(this.uri), headers: headers);
+      final http.Response response = await http.get(Uri.parse(uri), headers: headers);
       final String body = response.body;
       if (!body.contains('#EXTM3U')) {
         return false;
