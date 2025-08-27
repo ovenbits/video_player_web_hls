@@ -17,12 +17,12 @@ class _VideoAppState extends State<VideoApp> {
   void initState() {
     super.initState();
     try {
-      _controller = VideoPlayerController.network(
-          'https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8')
-        ..initialize().then((_) {
-          // Ensure the first frame is shown after the video is initialized, even before the play button has been pressed.
-          setState(() {});
-        });
+      _controller =
+          VideoPlayerController.networkUrl(Uri.parse('https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8'))
+            ..initialize().then((_) {
+              // Ensure the first frame is shown after the video is initialized, even before the play button has been pressed.
+              setState(() {});
+            });
       _controller.setVolume(0.0);
     } catch (e) {
       print(e);
@@ -36,23 +36,16 @@ class _VideoAppState extends State<VideoApp> {
       home: Scaffold(
         body: Center(
           child: _controller.value.isInitialized
-              ? AspectRatio(
-                  aspectRatio: _controller.value.aspectRatio,
-                  child: VideoPlayer(_controller),
-                )
+              ? AspectRatio(aspectRatio: _controller.value.aspectRatio, child: VideoPlayer(_controller))
               : Container(),
         ),
         floatingActionButton: FloatingActionButton(
           onPressed: () {
             setState(() {
-              _controller.value.isPlaying
-                  ? _controller.pause()
-                  : _controller.play();
+              _controller.value.isPlaying ? _controller.pause() : _controller.play();
             });
           },
-          child: Icon(
-            _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-          ),
+          child: Icon(_controller.value.isPlaying ? Icons.pause : Icons.play_arrow),
         ),
       ),
     );

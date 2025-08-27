@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:js_interop';
 import 'dart:math';
 
+//import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
@@ -80,7 +81,6 @@ class VideoPlayer {
       ..autoplay = false
       ..controls = false
       ..playsInline = true;
-
     if (_hlsFallback == true || await shouldUseHlsLibrary()) {
       _hlsFallback = false;
       try {
@@ -102,10 +102,12 @@ class VideoPlayer {
             }.toJS,
           ),
         );
+        _hls!.subtitleDisplay = false.toJS;
+        _hls!.subtitleTrack = (-1).toJS;
         _hls!.attachMedia(_videoElement);
         _hls!.on(
           'hlsMediaAttached',
-          ((String _, JSObject __) {
+          ((String event, JSObject _) {
             _hls!.loadSource(uri.toString());
           }.toJS),
         );
@@ -113,10 +115,10 @@ class VideoPlayer {
           'hlsError',
           (String _, JSObject data) {
             try {
-              final ErrorData _data = ErrorData(data);
-              if (_data.fatal) {
+              final ErrorData errorData = ErrorData(data);
+              if (errorData.fatal) {
                 _eventController.addError(
-                  PlatformException(code: _kErrorValueToErrorName[2]!, message: _data.type, details: _data.details),
+                  PlatformException(code: _kErrorValueToErrorName[2]!, message: errorData.type, details: errorData.details),
                 );
               }
             } catch (e) {
@@ -135,12 +137,13 @@ class VideoPlayer {
       }
     } else {
       _videoElement.src = uri.toString();
-      final onDurationChange = (web.Event event) {
+      onDurationChange(web.Event event) {
         if (_videoElement.duration == 0) {
           return;
         }
         _onVideoElementInitialization(event);
-      };
+      }
+
       _eventsSubscriptions.add(_videoElement.onDurationChange.listen(onDurationChange));
     }
 
@@ -315,12 +318,22 @@ class VideoPlayer {
   // Sends an [VideoEventType.initialized] [VideoEvent] with info about the wrapped video.
   void _sendInitialized() {
     final Duration? duration = convertNumVideoDurationToPluginDuration(_videoElement.duration);
-
     final Size? size = _videoElement.videoHeight.isFinite
         ? Size(_videoElement.videoWidth.toDouble(), _videoElement.videoHeight.toDouble())
         : null;
 
     _eventController.add(VideoEvent(eventType: VideoEventType.initialized, duration: duration, size: size));
+
+    // TODO: DOUBLE CHECK THIS SOLUTION
+    // final Duration? duration = convertNumVideoDurationToPluginDuration(_videoElement.duration);
+    // DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    // deviceInfo.webBrowserInfo.then((info) {
+    //   var isSafari = info.browserName == BrowserName.safari;
+    //   final Size? size = _videoElement.videoHeight.isFinite
+    //       ? Size(isSafari ? 640 : _videoElement.videoWidth.toDouble(), isSafari ? 360 : _videoElement.videoHeight.toDouble())
+    //       : null;
+    //   _eventController.add(VideoEvent(eventType: VideoEventType.initialized, duration: duration, size: size));
+    // });
   }
 
   /// Caches the current "buffering" state of the video.
@@ -363,7 +376,9 @@ class VideoPlayer {
     try {
       final String canPlayType = _videoElement.canPlayType('application/vnd.apple.mpegurl');
       canPlayHls = canPlayType != '';
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Error checking if video element can play HLS natively: $e');
+    }
     return canPlayHls;
   }
 
@@ -385,7 +400,7 @@ class VideoPlayer {
       } else {
         headers['Range'] = 'bytes=0-1023';
       }
-      final http.Response response = await http.get(Uri.parse(this.uri), headers: headers);
+      final http.Response response = await http.get(Uri.parse(uri), headers: headers);
       final String body = response.body;
       if (!body.contains('#EXTM3U')) {
         return false;

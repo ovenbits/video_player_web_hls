@@ -92,7 +92,7 @@ class VideoPlayerPluginHls extends VideoPlayerPlatform {
     final VideoPlayer player = VideoPlayer(
       videoElement: videoElement,
       uri: uri,
-      headers: headers ?? Map<String, String>(),
+      headers: headers ?? <String, String>{},
     );
 
     await player.initialize();

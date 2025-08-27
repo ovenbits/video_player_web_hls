@@ -16,14 +16,14 @@ class Hls {
 
 extension HlsExtension on Hls {
   external void stopLoad();
-
   external void loadSource(String videoSrc);
-
   external void attachMedia(web.HTMLVideoElement video);
-
   external void on(String event, JSFunction callback);
-
+  external set subtitleDisplay(JSBoolean show);
+  external set subtitleTrack(JSNumber subtitleTrackId);
   external HlsConfig config;
+
+  external JSBoolean get subtitleDisplay;
 }
 
 @JS()
