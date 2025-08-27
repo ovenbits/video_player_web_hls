@@ -33,13 +33,12 @@ const Map<int, String> _kErrorValueToErrorDescription = <int, String>{
   2: 'A network error occurred while fetching the video, despite having previously been available.',
   3: 'An error occurred while trying to decode the video, despite having previously been determined to be usable.',
   4: 'The video has been found to be unsuitable (missing or in a format not supported by your browser).',
-  5: 'Could not load manifest'
+  5: 'Could not load manifest',
 };
 
 // The default error message, when the error is an empty string
 // See: https://developer.mozilla.org/en-US/docs/Web/API/MediaError/message
-const String _kDefaultErrorMessage =
-    'No further diagnostic information can be determined or provided.';
+const String _kDefaultErrorMessage = 'No further diagnostic information can be determined or provided.';
 
 /// Wraps a [html.VideoElement] so its API complies with what is expected by the plugin.
 class VideoPlayer {
@@ -49,8 +48,8 @@ class VideoPlayer {
     required this.uri,
     required this.headers,
     @visibleForTesting StreamController<VideoEvent>? eventController,
-  })  : _videoElement = videoElement,
-        _eventController = eventController ?? StreamController<VideoEvent>();
+  }) : _videoElement = videoElement,
+       _eventController = eventController ?? StreamController<VideoEvent>();
 
   final StreamController<VideoEvent> _eventController;
   final web.HTMLVideoElement _videoElement;
@@ -105,30 +104,32 @@ class VideoPlayer {
         );
         _hls!.attachMedia(_videoElement);
         _hls!.on(
-            'hlsMediaAttached',
-            ((String _, JSObject __) {
-              _hls!.loadSource(uri.toString());
-            }.toJS));
+          'hlsMediaAttached',
+          ((String _, JSObject __) {
+            _hls!.loadSource(uri.toString());
+          }.toJS),
+        );
         _hls!.on(
-            'hlsError',
-            (String _, JSObject data) {
-              try {
-                final ErrorData _data = ErrorData(data);
-                if (_data.fatal) {
-                  _eventController.addError(PlatformException(
-                    code: _kErrorValueToErrorName[2]!,
-                    message: _data.type,
-                    details: _data.details,
-                  ));
-                }
-              } catch (e) {
-                debugPrint('Error parsing hlsError: $e');
+          'hlsError',
+          (String _, JSObject data) {
+            try {
+              final ErrorData _data = ErrorData(data);
+              if (_data.fatal) {
+                _eventController.addError(
+                  PlatformException(code: _kErrorValueToErrorName[2]!, message: _data.type, details: _data.details),
+                );
               }
-            }.toJS);
-        _eventsSubscriptions.add(_videoElement.onCanPlay.listen((dynamic _) {
-          _onVideoElementInitialization(_) ;
-          setBuffering(false);
-        }));
+            } catch (e) {
+              debugPrint('Error parsing hlsError: $e');
+            }
+          }.toJS,
+        );
+        _eventsSubscriptions.add(
+          _videoElement.onCanPlay.listen((dynamic value) {
+            _onVideoElementInitialization(value);
+            setBuffering(false);
+          }),
+        );
       } catch (e) {
         throw NoScriptTagException();
       }
@@ -140,56 +141,67 @@ class VideoPlayer {
         }
         _onVideoElementInitialization(event);
       };
-      _eventsSubscriptions
-          .add(_videoElement.onDurationChange.listen(onDurationChange));
+      _eventsSubscriptions.add(_videoElement.onDurationChange.listen(onDurationChange));
     }
 
     // Needed for Safari iOS 17, which may not send `canplay`.
     _videoElement.onLoadedMetadata.listen(_onVideoElementInitialization);
 
-    _eventsSubscriptions.add(_videoElement.onCanPlayThrough.listen((dynamic _) {
-      setBuffering(false);
-    }));
+    _eventsSubscriptions.add(
+      _videoElement.onCanPlayThrough.listen((dynamic _) {
+        setBuffering(false);
+      }),
+    );
 
-    _eventsSubscriptions.add(_videoElement.onPlaying.listen((dynamic _) {
-      setBuffering(false);
-    }));
+    _eventsSubscriptions.add(
+      _videoElement.onPlaying.listen((dynamic _) {
+        setBuffering(false);
+      }),
+    );
 
-    _eventsSubscriptions.add(_videoElement.onWaiting.listen((dynamic _) {
-      setBuffering(true);
-      _sendBufferingRangesUpdate();
-    }));
+    _eventsSubscriptions.add(
+      _videoElement.onWaiting.listen((dynamic _) {
+        setBuffering(true);
+        _sendBufferingRangesUpdate();
+      }),
+    );
 
     // The error event fires when some form of error occurs while attempting to load or perform the media.
-    _eventsSubscriptions.add(_videoElement.onError.listen((web.Event _) {
-      // The Event itself (_) doesn't contain info about the actual error.
-      // We need to look at the HTMLMediaElement.error.
-      // See: https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/error
-      final web.MediaError error = _videoElement.error!;
-      final errorCode = error.code;
-      if (_hls == null && _hlsFallback == null && errorCode == 4) {
-        // MEDIA_ERR_SRC_NOT_SUPPORTED
-        // Native play did not succeed, fallback to hlsjs
-        _hlsFallback = true;
-        // Cancel all event listeners and re initialize
-        for (final sub in _eventsSubscriptions) {
-          sub.cancel();
+    _eventsSubscriptions.add(
+      _videoElement.onError.listen((web.Event _) {
+        // The Event itself (_) doesn't contain info about the actual error.
+        // We need to look at the HTMLMediaElement.error.
+        // See: https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/error
+        final web.MediaError error = _videoElement.error!;
+        final errorCode = error.code;
+        if (_hls == null && _hlsFallback == null && errorCode == 4) {
+          // MEDIA_ERR_SRC_NOT_SUPPORTED
+          // Native play did not succeed, fallback to hlsjs
+          _hlsFallback = true;
+          // Cancel all event listeners and re initialize
+          for (final sub in _eventsSubscriptions) {
+            sub.cancel();
+          }
+          initialize();
+          return;
         }
-        initialize();
-        return;
-      }
-      setBuffering(false);
-      _eventController.addError(PlatformException(
-        code: _kErrorValueToErrorName[error.code]!,
-        message: error.message != '' ? error.message : _kDefaultErrorMessage,
-        details: _kErrorValueToErrorDescription[error.code],
-      ));
-    }));
+        setBuffering(false);
+        _eventController.addError(
+          PlatformException(
+            code: _kErrorValueToErrorName[error.code]!,
+            message: error.message != '' ? error.message : _kDefaultErrorMessage,
+            details: _kErrorValueToErrorDescription[error.code],
+          ),
+        );
+      }),
+    );
 
-    _eventsSubscriptions.add(_videoElement.onEnded.listen((dynamic _) {
-      setBuffering(false);
-      _eventController.add(VideoEvent(eventType: VideoEventType.completed));
-    }));
+    _eventsSubscriptions.add(
+      _videoElement.onEnded.listen((dynamic _) {
+        setBuffering(false);
+        _eventController.add(VideoEvent(eventType: VideoEventType.completed));
+      }),
+    );
   }
 
   /// Attempts to play the video.
@@ -207,10 +219,7 @@ class VideoPlayer {
       // The rejection handler is called with a DOMException.
       // See: https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/play
       final web.DOMException exception = e as web.DOMException;
-      _eventController.addError(PlatformException(
-        code: exception.name,
-        message: exception.message,
-      ));
+      _eventController.addError(PlatformException(code: exception.name, message: exception.message));
       return null;
     }, test: (Object e) => e is web.DOMException);
   }
@@ -305,23 +314,13 @@ class VideoPlayer {
 
   // Sends an [VideoEventType.initialized] [VideoEvent] with info about the wrapped video.
   void _sendInitialized() {
-    final Duration? duration =
-        convertNumVideoDurationToPluginDuration(_videoElement.duration);
+    final Duration? duration = convertNumVideoDurationToPluginDuration(_videoElement.duration);
 
     final Size? size = _videoElement.videoHeight.isFinite
-        ? Size(
-            _videoElement.videoWidth.toDouble(),
-            _videoElement.videoHeight.toDouble(),
-          )
+        ? Size(_videoElement.videoWidth.toDouble(), _videoElement.videoHeight.toDouble())
         : null;
 
-    _eventController.add(
-      VideoEvent(
-        eventType: VideoEventType.initialized,
-        duration: duration,
-        size: size,
-      ),
-    );
+    _eventController.add(VideoEvent(eventType: VideoEventType.initialized, duration: duration, size: size));
   }
 
   /// Caches the current "buffering" state of the video.
@@ -332,30 +331,29 @@ class VideoPlayer {
   void setBuffering(bool buffering) {
     if (_isBuffering != buffering) {
       _isBuffering = buffering;
-      _eventController.add(VideoEvent(
-        eventType: _isBuffering
-            ? VideoEventType.bufferingStart
-            : VideoEventType.bufferingEnd,
-      ));
+      _eventController.add(
+        VideoEvent(eventType: _isBuffering ? VideoEventType.bufferingStart : VideoEventType.bufferingEnd),
+      );
     }
   }
 
   // Broadcasts the [html.VideoElement.buffered] status through the [events] stream.
   void _sendBufferingRangesUpdate() {
-    _eventController.add(VideoEvent(
-      buffered: _toDurationRange(_videoElement.buffered),
-      eventType: VideoEventType.bufferingUpdate,
-    ));
+    _eventController.add(
+      VideoEvent(buffered: _toDurationRange(_videoElement.buffered), eventType: VideoEventType.bufferingUpdate),
+    );
   }
 
   // Converts from [html.TimeRanges] to our own List<DurationRange>.
   List<DurationRange> _toDurationRange(web.TimeRanges buffered) {
     final List<DurationRange> durationRange = <DurationRange>[];
     for (int i = 0; i < buffered.length; i++) {
-      durationRange.add(DurationRange(
-        Duration(milliseconds: (buffered.start(i) * 1000).round()),
-        Duration(milliseconds: (buffered.end(i) * 1000).round()),
-      ));
+      durationRange.add(
+        DurationRange(
+          Duration(milliseconds: (buffered.start(i) * 1000).round()),
+          Duration(milliseconds: (buffered.end(i) * 1000).round()),
+        ),
+      );
     }
     return durationRange;
   }
@@ -363,17 +361,14 @@ class VideoPlayer {
   bool canPlayHlsNatively() {
     bool canPlayHls = false;
     try {
-      final String canPlayType =
-          _videoElement.canPlayType('application/vnd.apple.mpegurl');
+      final String canPlayType = _videoElement.canPlayType('application/vnd.apple.mpegurl');
       canPlayHls = canPlayType != '';
     } catch (e) {}
     return canPlayHls;
   }
 
   Future<bool> shouldUseHlsLibrary() async {
-    return isSupported() &&
-        (uri.toString().contains('m3u8') || await _testIfM3u8()) &&
-        !canPlayHlsNatively();
+    return isSupported() && (uri.toString().contains('m3u8') || await _testIfM3u8()) && !canPlayHlsNatively();
   }
 
   Future<bool> _testIfM3u8() async {
@@ -390,8 +385,7 @@ class VideoPlayer {
       } else {
         headers['Range'] = 'bytes=0-1023';
       }
-      final http.Response response =
-          await http.get(Uri.parse(this.uri), headers: headers);
+      final http.Response response = await http.get(Uri.parse(this.uri), headers: headers);
       final String body = response.body;
       if (!body.contains('#EXTM3U')) {
         return false;
