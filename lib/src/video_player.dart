@@ -382,8 +382,54 @@ class VideoPlayer {
     return canPlayHls;
   }
 
+  bool isSafariFamilyBrowser() {
+    final String userAgent = web.window.navigator.userAgent.toLowerCase();
+    final String vendor = web.window.navigator.vendor.toLowerCase();
+    final bool isAppleVendor = vendor.contains('apple');
+    final bool hasSafariToken = userAgent.contains('safari');
+    final bool isCriOS = userAgent.contains('crios');
+    final bool isFxiOS = userAgent.contains('fxios');
+    final bool isEdge = userAgent.contains('edg/');
+    final bool isOpera = userAgent.contains('opr/');
+    final bool hasChromiumToken = userAgent.contains('chrome') || userAgent.contains('chromium');
+
+    return isAppleVendor &&
+        hasSafariToken &&
+        !isCriOS &&
+        !isFxiOS &&
+        !isEdge &&
+        !isOpera &&
+        !hasChromiumToken;
+  }
+
+  bool isChromiumBrowser() {
+    final String userAgent = web.window.navigator.userAgent.toLowerCase();
+    final bool hasChromiumToken =
+        userAgent.contains('chrome') ||
+        userAgent.contains('chromium') ||
+        userAgent.contains('crios') ||
+        userAgent.contains('edg/') ||
+        userAgent.contains('opr/');
+    final bool isFirefox = userAgent.contains('firefox') || userAgent.contains('fxios');
+
+    return hasChromiumToken && !isFirefox;
+  }
+
   Future<bool> shouldUseHlsLibrary() async {
-    return isSupported() && (uri.toString().contains('m3u8') || await _testIfM3u8()) && !canPlayHlsNatively();
+    final bool isHlsStream = uri.toString().contains('m3u8') || await _testIfM3u8();
+    if (!isSupported() || !isHlsStream) {
+      return false;
+    }
+
+    if (isChromiumBrowser()) {
+      return true;
+    }
+
+    if (isSafariFamilyBrowser()) {
+      return false;
+    }
+
+    return !canPlayHlsNatively();
   }
 
   Future<bool> _testIfM3u8() async {
