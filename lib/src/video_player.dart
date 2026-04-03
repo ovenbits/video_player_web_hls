@@ -86,6 +86,7 @@ class VideoPlayer {
       try {
         _hls = Hls(
           HlsConfig(
+            abrEwmaDefaultEstimate: (5000000).toJS,
             xhrSetup: (web.XMLHttpRequest xhr, String _) {
               if (headers.isEmpty) {
                 return;

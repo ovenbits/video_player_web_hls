@@ -30,11 +30,15 @@ extension HlsExtension on Hls {
 @anonymous
 @staticInterop
 class HlsConfig {
-  external factory HlsConfig({JSFunction xhrSetup});
+  external factory HlsConfig({
+    JSFunction xhrSetup,
+    JSNumber abrEwmaDefaultEstimate,
+  });
 }
 
 extension HlsConfigExtension on HlsConfig {
   external JSFunction get xhrSetup;
+  external JSNumber get abrEwmaDefaultEstimate;
 }
 
 class ErrorData {
