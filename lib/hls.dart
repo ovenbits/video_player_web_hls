@@ -2,11 +2,31 @@
 library hls.js;
 
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 import 'package:web/web.dart' as web;
 
 @JS('Hls.isSupported')
 external bool isSupported();
+
+bool isHlsJsAvailable() {
+  try {
+    return globalContext.has('Hls');
+  } catch (_) {
+    return false;
+  }
+}
+
+bool isHlsPlaybackSupported() {
+  if (!isHlsJsAvailable()) {
+    return false;
+  }
+  try {
+    return isSupported();
+  } catch (_) {
+    return false;
+  }
+}
 
 @JS()
 @staticInterop
@@ -30,10 +50,7 @@ extension HlsExtension on Hls {
 @anonymous
 @staticInterop
 class HlsConfig {
-  external factory HlsConfig({
-    JSFunction xhrSetup,
-    JSNumber abrEwmaDefaultEstimate,
-  });
+  external factory HlsConfig({JSFunction xhrSetup, JSNumber abrEwmaDefaultEstimate});
 }
 
 extension HlsConfigExtension on HlsConfig {

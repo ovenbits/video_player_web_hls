@@ -119,7 +119,11 @@ class VideoPlayer {
               final ErrorData errorData = ErrorData(data);
               if (errorData.fatal) {
                 _eventController.addError(
-                  PlatformException(code: _kErrorValueToErrorName[2]!, message: errorData.type, details: errorData.details),
+                  PlatformException(
+                    code: _kErrorValueToErrorName[2]!,
+                    message: errorData.type,
+                    details: errorData.details,
+                  ),
                 );
               }
             } catch (e) {
@@ -394,13 +398,7 @@ class VideoPlayer {
     final bool isOpera = userAgent.contains('opr/');
     final bool hasChromiumToken = userAgent.contains('chrome') || userAgent.contains('chromium');
 
-    return isAppleVendor &&
-        hasSafariToken &&
-        !isCriOS &&
-        !isFxiOS &&
-        !isEdge &&
-        !isOpera &&
-        !hasChromiumToken;
+    return isAppleVendor && hasSafariToken && !isCriOS && !isFxiOS && !isEdge && !isOpera && !hasChromiumToken;
   }
 
   bool isChromiumBrowser() {
@@ -418,7 +416,7 @@ class VideoPlayer {
 
   Future<bool> shouldUseHlsLibrary() async {
     final bool isHlsStream = uri.toString().contains('m3u8') || await _testIfM3u8();
-    if (!isSupported() || !isHlsStream) {
+    if (!isHlsPlaybackSupported() || !isHlsStream) {
       return false;
     }
 
