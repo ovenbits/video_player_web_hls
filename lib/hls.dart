@@ -44,6 +44,14 @@ extension HlsExtension on Hls {
   external HlsConfig config;
 
   external JSBoolean get subtitleDisplay;
+
+  /// Restarts the loader after a fatal network error.
+  ///
+  /// See hls.js error recovery: https://github.com/video-dev/hls.js/blob/master/docs/API.md#error-recovery
+  external void startLoad([int startPosition]);
+
+  /// Attempts to recover from a fatal media (decode/buffer) error.
+  external void recoverMediaError();
 }
 
 @JS()
