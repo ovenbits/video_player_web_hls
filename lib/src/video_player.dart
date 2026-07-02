@@ -66,6 +66,15 @@ class VideoPlayer {
   /// Force use hlsjs when set to `true`.
   bool? _hlsFallback;
 
+  /// Number of consecutive fatal hls.js errors we have tried to recover from
+  /// in place (via [Hls.startLoad] / [Hls.recoverMediaError]) without playback
+  /// resuming. Reset once playback progresses again.
+  int _hlsRecoveryAttempts = 0;
+
+  /// Maximum in-place recovery attempts before a fatal hls.js error is surfaced
+  /// to the plugin as a terminal error.
+  static const int _maxHlsRecoveryAttempts = 3;
+
   /// Returns the [Stream] of [VideoEvent]s from the inner [html.VideoElement].
   Stream<VideoEvent> get events => _eventController.stream;
 
@@ -118,13 +127,7 @@ class VideoPlayer {
             try {
               final ErrorData errorData = ErrorData(data);
               if (errorData.fatal) {
-                _eventController.addError(
-                  PlatformException(
-                    code: _kErrorValueToErrorName[2]!,
-                    message: errorData.type,
-                    details: errorData.details,
-                  ),
-                );
+                _handleFatalHlsError(errorData);
               }
             } catch (e) {
               debugPrint('Error parsing hlsError: $e');
@@ -163,6 +166,9 @@ class VideoPlayer {
 
     _eventsSubscriptions.add(
       _videoElement.onPlaying.listen((dynamic _) {
+        // Playback resumed: a subsequent unrelated fatal error should get a
+        // fresh recovery budget.
+        _hlsRecoveryAttempts = 0;
         setBuffering(false);
       }),
     );
@@ -209,6 +215,45 @@ class VideoPlayer {
         setBuffering(false);
         _eventController.add(VideoEvent(eventType: VideoEventType.completed));
       }),
+    );
+  }
+
+  /// Handles a fatal hls.js error.
+  ///
+  /// hls.js flags many recoverable startup/stall conditions as `fatal`,
+  /// expecting the host to recover in place rather than tear the player down.
+  /// We attempt hls.js's built-in recovery (bounded by [_maxHlsRecoveryAttempts])
+  /// and only surface a terminal error once recovery is exhausted or the error
+  /// is not recoverable.
+  ///
+  /// See: https://github.com/video-dev/hls.js/blob/master/docs/API.md#error-recovery
+  void _handleFatalHlsError(ErrorData errorData) {
+    final Hls? hls = _hls;
+    final bool canRecover = hls != null && _hlsRecoveryAttempts < _maxHlsRecoveryAttempts;
+
+    if (canRecover && errorData.type == 'networkError') {
+      _hlsRecoveryAttempts++;
+      debugPrint(
+        'hls.js fatal networkError, restarting load '
+        '($_hlsRecoveryAttempts/$_maxHlsRecoveryAttempts): ${errorData.details}',
+      );
+      hls.startLoad();
+      return;
+    }
+
+    if (canRecover && errorData.type == 'mediaError') {
+      _hlsRecoveryAttempts++;
+      debugPrint(
+        'hls.js fatal mediaError, recovering '
+        '($_hlsRecoveryAttempts/$_maxHlsRecoveryAttempts): ${errorData.details}',
+      );
+      hls.recoverMediaError();
+      return;
+    }
+
+    setBuffering(false);
+    _eventController.addError(
+      PlatformException(code: _kErrorValueToErrorName[2]!, message: errorData.type, details: errorData.details),
     );
   }
 
