@@ -71,9 +71,9 @@ class ErrorData {
   late final String details;
   late final bool fatal;
 
-  ErrorData(dynamic errorData) {
-    type = errorData.type as String;
-    details = errorData.details as String;
-    fatal = errorData.fatal as bool;
+  ErrorData(JSObject errorData) {
+    type = (errorData.getProperty('type'.toJS) as JSString?)?.toDart ?? 'unknown';
+    details = (errorData.getProperty('details'.toJS) as JSString?)?.toDart ?? '';
+    fatal = (errorData.getProperty('fatal'.toJS) as JSBoolean?)?.toDart ?? false;
   }
 }
